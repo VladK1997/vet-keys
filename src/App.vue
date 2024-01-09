@@ -1,8 +1,20 @@
 <script setup lang="ts">
 import HelloWorld from './components/HelloWorld.vue'
 
-import * as vetkd from "ic-vetkd-utils";
+import initVetkd, {
+  TransportSecretKey,
+  IBECiphertext,
+  InitOutput as VetkdUtilsOutput,
+} from 'vetkd-utils';
 
+let initVetkdPromise: Promise<VetkdUtilsOutput> | null = null;
+const getVetkd = async () => {
+  if (!initVetkdPromise) {
+    initVetkdPromise = initVetkd();
+  }
+
+  return await initVetkdPromise;
+};
 
 const hex_decode = (hexString: any) => {
   if (!hexString) return;
@@ -25,12 +37,14 @@ async function ibe_encrypt({
   message: string;
   principal: any;
 }): Promise<any> {
+  await getVetkd();
+
   const pk_bytes_hex = await actor.ibe_encryption_key();
 
   const message_encoded = new TextEncoder().encode(message);
   const seed = window.crypto.getRandomValues(new Uint8Array(32));
 
-  const ibe_ciphertext = vetkd.IBECiphertext.encrypt(
+  const ibe_ciphertext = IBECiphertext.encrypt(
       hex_decode(pk_bytes_hex),
       principal.toUint8Array(),
       message_encoded,
@@ -48,8 +62,10 @@ async function ibe_decrypt({
   ibe_ciphertext_hex: string;
   principal: any;
 }) {
+  await getVetkd();
+
   const tsk_seed = window.crypto.getRandomValues(new Uint8Array(32));
-  const tsk = new vetkd.TransportSecretKey(tsk_seed);
+  const tsk = new TransportSecretKey(tsk_seed);
   const ek_bytes_hex = await actor.encrypted_ibe_decryption_key_for_caller(tsk.public_key());
   const pk_bytes_hex = await actor.ibe_encryption_key();
 
@@ -59,7 +75,7 @@ async function ibe_decrypt({
       principal.toUint8Array()
   );
 
-  const ibe_ciphertext = vetkd.IBECiphertext.deserialize(
+  const ibe_ciphertext = IBECiphertext.deserialize(
       hex_decode(ibe_ciphertext_hex)
   );
   const ibe_plaintext = ibe_ciphertext.decrypt(k_bytes);
